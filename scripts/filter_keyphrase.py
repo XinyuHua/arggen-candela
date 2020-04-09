@@ -2,7 +2,7 @@
 import json
 
 STOPWORDS = [w.lower() for w in open('dat/stopwords.txt')]
-WIKI_TITLE = [] # NEED TO BE SUBSTITUTE WITH REAL DATA
+WIKI_TITLE = [w.strip() for w in open('dat/wikipedia_titles_filtered.txt')]
 
 def filter_kp(candidates, topic_signatures):
     """Rule-based keyphrase filtering:
