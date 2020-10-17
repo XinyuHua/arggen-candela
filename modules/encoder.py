@@ -25,7 +25,7 @@ class EncoderRNN(nn.Module):
 
         embedded = self.embedding(inputs)
         lengths_list = input_lengths.view(-1).tolist()
-        packed_emb = pack(embedded, lengths_list, True)
+        packed_emb = pack(embedded, batch_first=True, lengths=lengths_list, enforce_sorted=False)
 
         memory_bank, encoder_final = self.LSTM(packed_emb)
         memory_bank = unpack(memory_bank)[0].view(inputs.size(0), inputs.size(1), -1)

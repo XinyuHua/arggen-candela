@@ -37,7 +37,6 @@ class RNNDecoderBase(nn.Module):
             return hidden
 
         self.state["hidden"] = tuple([_fix_enc_hidden(enc_hid) for enc_hid in encoder_final])
-        batch_size = self.state["hidden"][0].size(1)
 
 
 class WordDecoder(RNNDecoderBase):
@@ -63,8 +62,7 @@ class WordDecoder(RNNDecoderBase):
         Initialize attention for word decoder
         """
         self.enc_attn = attention.GlobalAttention(query_dim=self.hidden_size,
-                                                  key_dim=self.hidden_size,
-                                                  attn_type="bilinear")
+                                                  key_dim=self.hidden_size)
         return
 
     def map_state(self, fn):
@@ -98,43 +96,39 @@ class WordDecoder(RNNDecoderBase):
         readouts = self.readout(dec_outs)
         return readouts, dec_outs, enc_attn
 
-    def forward(self, tgt_words, tgt_word_len, enc_memory_bank,
+    def forward(self, dec_inputs, tgt_word_len, enc_memory_bank,
                 enc_memory_len, sent_planner_output, sent_id_template,
                 sent_mask_template):
         """
         The word decoder forward path depends on both encoder hidden states
         and the corresponding hidden states of sentence planner.
         Args:
-            tgt_words (LongTensor): the sequence of word ids for current batch
-                                    [batch_size x max_rr_len]
-            tgt_word_len (LongTensor): the length information for the equence
-                                    [batch_size]
-            enc_memory_bank (FloatTensor): hidden states for encoder
-                                    [batch_size x max_op_len x enc_hidden_size]
-            enc_memory_len (LongTensor): the length of the encoder states
-                                    [batch_size]
-            sent_planner_output (FloatTensor): the output states of sentence planner
-                                    [batch_size x max_rr_sent_cnt x dec_out_dim]
-            sent_id_template (LongTensor): sentence id for each token
-                                    [batch_size x max_rr_len]
-            sent_mask_template (LongTensor): mask for token padding
-                                    [batch_size x max_rr_len]
+            dec_inputs (batch_size x max_tgt_len): decoder inputs.
+            dec_inputs_len (batch_size): length for targets.
+            enc_mem_bank (batch_size x max_src_len x dim): hidden states of the
+                encoder memory bank.
+            enc_mem_len (batch_size): length of the encoder states.
+            sent_planner_output (batch_size x max_tgt_sent, dim): output states
+                of the sentence planner decoder.
+            sent_id_template (batch_size x max_tgt_len): sentence id for each
+                target token.
+            sent_mask_template (batch_size x max_tgt_len): mask for paddings.
         """
 
-        max_rr_len = sent_id_template.size(1)
+        max_tgt_len = sent_id_template.size(1)
         sent_planner_output_dim = sent_planner_output.size(-1)
         sent_id_template_expanded = sent_id_template.unsqueeze(dim=-1) \
-            .expand(-1, max_rr_len,
+            .expand(-1, max_tgt_len,
                     sent_planner_output_dim)
 
         token_distributed_sent_planner_output = torch.gather(
             sent_planner_output, 1, sent_id_template_expanded)
         # at this point, the size of the following tensor should be:
         # [batch_size x max_rr_len x sp_out_dim]
-        token_distributed_sent_planner_output_masked = sent_mask_template.float() \
+        token_distributed_sent_planner_output_masked = sent_mask_template.float().unsqueeze(-1) \
                                                        * token_distributed_sent_planner_output
 
-        word_emb = self.embedding(tgt_words)
+        word_emb = self.embedding(dec_inputs)
         merged_inputs = self.word_transformation(word_emb) \
                         + self.planner_transformation(token_distributed_sent_planner_output_masked)
         rnn_input = torch.tanh(merged_inputs)
@@ -144,9 +138,9 @@ class WordDecoder(RNNDecoderBase):
             rnn_output.contiguous(),
             enc_memory_bank.contiguous(),
             memory_lengths=enc_memory_len)
-        readouts = self.readout(dec_outs)
+        token_logits = self.readout(dec_outs)
 
-        return dec_state, dec_outs, enc_attn, readouts
+        return dec_state, dec_outs, enc_attn, token_logits
 
 
 class SentencePlanner(RNNDecoderBase):
@@ -172,33 +166,34 @@ class SentencePlanner(RNNDecoderBase):
     def _run_forward_pass(self, ph_sel, phrase_bank, phrase_lengths=None):
         """
         Args:
-            ph_sum_emb (FloatTensor): a tensor of phrase embeddings for each
-                                      RR sentence
-                                     [batch x max_sent_num x ph_emb_dim]
-            phrase_bank (FloatTensor): embeddings for phrase collections
-                            [batch x len x nfeats]
-            phrase_lengths (LongTensor): the lengths of phrase collections
+            ph_sel (batch_size x max_sent_num x max_ph_per_sent x max_ph_len):
+                token ids for selected phrases
+            phrase_bank (batch_size x max_ph_bank_size x dim): embeddings for
+                phrases in each phrase bank for each sample
+            phrase_lengths (batch_size): size of phrase bank for each sample
+
         Returns:
-            dec_state (Tensor): final hidden state from the decoder.
-            dec_outs ([FloatTensor]): an array of output of every time step
+            dec_state (Tuple of C and H): final hidden state from the decoder.
+            dec_outs (batch_size x max_sent_num x dim): an array of output of every time step
                                       from the decoder.
-            ph_attns ([FloatTensor]): phrase attention Tensor array of every
-                                      time step from the decoder.
+            ph_attns (batch_size x max_sent_num x max_ph_bank_size): phrase
+                attention Tensor array of every time step from the decoder.
         """
         ph_sel_emb = self.embedding(ph_sel)
-        ph_sel_emb = torch.sum(ph_sel_emb, -2)
-        ph_sum_emb = torch.sum(ph_sel_emb, -2)
+        ph_sel_emb = torch.sum(ph_sel_emb, -2) # sum over all tokens in each phrase
+        ph_sum_emb = torch.sum(ph_sel_emb, -2) # sum over all phrases in each sentence
         rnn_output, dec_state = self.LSTM(ph_sum_emb, self.state["hidden"])
         self.rnn_output = rnn_output
 
-        ph_batch, ph_len, _ = ph_sum_emb.size()
+        batch_size, max_sent_num, _ = ph_sum_emb.size()
 
         output_batch, output_len, _ = rnn_output.size()
 
-        utils.aeq(ph_len, output_len)
-        utils.aeq(ph_batch, output_batch)
+        utils.aeq(max_sent_num, output_len)
+        utils.aeq(batch_size, output_batch)
 
-        dec_outs, ph_attn, ph_attn_raw = self.ph_attn(
+
+        dec_outs, ph_attn_probs, ph_attn_logits = self.ph_attn(
             rnn_output.contiguous(),
             phrase_bank.contiguous(),
             memory_lengths=phrase_lengths,
@@ -207,16 +202,12 @@ class SentencePlanner(RNNDecoderBase):
 
         readouts = self.readout(dec_outs)
 
-        # dec_outs: [batch_size x max_sent_num x ph_emb_dim]
-        # readouts: [batch_size x max_sent_num x ph_vocab_size]
-
-        return dec_state, dec_outs, ph_attn, ph_attn_raw, readouts
+        return dec_state, dec_outs, ph_attn_probs, ph_attn_logits, readouts
 
     def init_attn(self):
         """
         Initialize attention for sentence planner decoder
         """
         self.ph_attn = attention.GlobalAttention(query_dim=self.hidden_size,
-                                                 key_dim=self.word_emb_size,
-                                                 attn_type="bilinear")
+                                                 key_dim=self.word_emb_size)
         return
