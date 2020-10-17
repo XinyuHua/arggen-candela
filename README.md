@@ -24,7 +24,7 @@ As described in the paper, we pre-train the encoder and realization decoder with
 
 ### To run
 
-We assume the data to be loaded under `./data/` directory, and the pre-trained Glove embedding at `./embeddings/glove.6B.300d.txt`. The following snippet trains the model:
+We assume the data to be loaded under `./data/` directory, and the pre-trained [Glove embedding](https://nlp.stanford.edu/projects/glove/) at `./embeddings/glove.6B.300d.txt`. The following snippet trains the model:
 
 ```shell script
 python train.py \
