@@ -1,8 +1,8 @@
 import numpy as np
 import torch
 
-DATA_DIR = "/data/model/xinyu/acl2019_code_release/data/"
-WEMB_DIR = "/data/model/embeddings/glove.6B.300d.txt"
+DATA_DIR = "./data/"
+WEMB_DIR = "./embeddings/glove.6B.300d.txt"
 
 def load_glove_emb(vocab):
     """

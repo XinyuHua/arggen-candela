@@ -1,14 +1,11 @@
 # Author: Xinyu Hua
-# Last modified: 2020-10-07
+# Last modified: 2020-10-16
 import os
-import time
-import logging
 import torch
 import torch.nn as nn
 from torch import optim
 from torch.utils.data import DataLoader
 from tensorboardX import SummaryWriter
-from tqdm import tqdm
 from modules.model import Candela
 from option import get_training_parser
 from vocab import Vocab
