@@ -19,6 +19,7 @@ class Vocab:
         self.sep_idx = 2
         self.eos_idx = 3
         self.unk_idx = 4
+        self.special_token_idx = [0, 1, 2, 3, 4]
 
     def __len__(self):
         return self.size
@@ -36,4 +37,4 @@ class Vocab:
         return [self.get_idx(w) for w in word_list]
 
     def decode(self, idx_list):
-        return [self.get_word(idx) for idx in idx_list]
+        return [self.get_word(idx) for idx in idx_list if idx > 0]

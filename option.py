@@ -13,11 +13,13 @@ def _add_common_args(parser):
                         help="whether to include passages as part of encoder input.")
     parser.add_argument("--max-tgt-sent", type=int, default=5,
                         help="Maximum number of sentences to consider (in target).")
+    parser.add_argument("--min-tgt-sent", type=int, default=2,
+                        help="Minimum number of sentences to consider (in target).")
     parser.add_argument("--max-tgt-token", type=int, default=100,
                         help="Maximum number of tokens to consider (in target), if longer do truncation.")
-    parser.add_argument("--max-op-token", type=int, default=200,
+    parser.add_argument("--max-op-token", type=int, default=100,
                         help="Maximum number of tokens in src (OP), if longer do truncation.")
-    parser.add_argument("--max-passage-token", type=int, default=400,
+    parser.add_argument("--max-passage-token", type=int, default=300,
                         help="Maximum number of tokens in src (passage), if longer do truncation.")
     parser.add_argument("--max-phrase-per-sent", type=int, default=10,
                         help="Maximum number of phrases in each sentence (target).")
@@ -38,8 +40,25 @@ def _add_training_specific_args(parser):
                         help="Loss coefficient for phrase selection.")
 
 
+def _add_inference_specific_args(parser):
+    parser.add_argument("--epoch-id", type=int, default=-1,
+                        help="The epoch id of checkpoint to load, use -1 to "
+                             "load the latest one.")
+    parser.add_argument("--max-phrase-selection-time", type=int, default=2)
+    parser.add_argument("--max-token-per-sentence", type=int, default=30)
+    parser.add_argument("--beam-size", type=int, default=5)
+    parser.add_argument("--block-ngram-repeat", type=int, default=4)
+    parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--use-goldstandard-plan", action="store_true")
+
 def get_training_parser():
     parser = argparse.ArgumentParser()
     _add_common_args(parser)
     _add_training_specific_args(parser)
+    return parser
+
+def get_inference_parser():
+    parser = argparse.ArgumentParser()
+    _add_common_args(parser)
+    _add_inference_specific_args(parser)
     return parser

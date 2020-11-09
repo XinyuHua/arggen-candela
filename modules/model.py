@@ -37,6 +37,18 @@ class Candela(nn.Module):
                                           word_vocab_size=word_vocab_size)
         return
 
+    @classmethod
+    def load_from_checkpoint(cls, path):
+        ckpt = torch.load(path)
+        word_emb = nn.Embedding.from_pretrained(ckpt["encoder"]["embedding.weight"])
+        model = cls(word_emb=word_emb, word_emb_dim=word_emb.embedding_dim,
+                        word_vocab_size=word_emb.num_embeddings)
+        model.enc.load_state_dict(ckpt["encoder"])
+        model.sp_dec.load_state_dict(ckpt["sp_decoder"])
+        model.wd_dec.load_state_dict(ckpt["wd_decoder"])
+        return model
+
+
     def forward(self, tensor_dict):
         enc_outs, encoder_final = self.enc(tensor_dict["enc_src"],
                                            tensor_dict["enc_src_len"])

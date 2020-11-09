@@ -16,42 +16,47 @@ class GlobalAttention(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
 
-    def score(self, h_t, h_s):
+    def score(self, query, key):
         """
+        Multiplicative attention (Luong attention):
+        align = (query * W)^T * key (shape: bsz x tgt_len x src_len, where
+        tgt_len is the sequence length of query, src_len is the sequence length
+        of key.)
+
         Args:
-            h_t (FloatTensor): sequence of queries [batch x tgt_len x h_t_dim]
-            h_s (FloatTensor): sequence of sources [batch x src_len x h_s_dim]
+            query (FloatTensor): sequence of queries [batch x tgt_len x query_dim]
+            key (FloatTensor): sequence of sources [batch x src_len x key_dim]
         Returns:
             raw attention scores for each src index [batch x tgt_len x src_len]
         """
+        k_bsz, k_len, k_dim = key.shape
+        q_bsz, q_len, q_dim = query.shape
 
-        src_batch, src_len, src_dim = h_s.size()
-        tgt_batch, tgt_len, tgt_dim = h_t.size()
-        utils.aeq(src_batch, tgt_batch)
+        assert k_bsz == q_bsz
+        assert k_dim == self.key_dim
+        assert q_dim == self.query_dim
 
-        h_t_ = h_t.view(tgt_batch * tgt_len, tgt_dim)
-        h_t_ = self.linear_in(h_t_)
-        h_t = h_t_.view(tgt_batch, tgt_len, src_dim)
-        h_s_ = h_s.transpose(1, 2)
-        return torch.bmm(h_t, h_s_)
+        query = query.view(-1, q_dim)
+        query_transformed = self.linear_in(query).view(q_bsz, q_len, k_dim)
+        key_transpose = key.transpose(1, 2)
+
+        align_raw = torch.bmm(query_transformed, key_transpose)
+        return align_raw
 
     def forward(self, query, memory_bank, memory_lengths=None, use_softmax=True):
         """
         Args:
-            query (FloatTensor): query vectors [batch x tgt_len x dim]
-            memory_bank (FloatTensor): source vectors [batch x src_len x dim]
+            query (FloatTensor): query vectors [batch x tgt_len x q_dim]
+            memory_bank (FloatTensor): source vectors [batch x src_len x k_dim]
             memory_lengths (LongTensor): source context lengths [batch]
             use_softmax (bool): use softmax to produce alignment score,
-                otherwise use sigmoid for each individual one
+                otherwise use sigmoid for keyphrase selection
         Returns:
-            (FloatTensor, FloatTensor)
-            computed attention weighted average: [batch x tgt_len x dim]
-            attention distribution: [batch x tgt_len x src_len]
+            attn_h (FloatTensor, batch x tgt_len x k_dim): weighted value vectors after attention
+            attn_vectors (FloatTensor, batch x tgt_len x src_len) : normalized attention scores
+            align (FloatTensor, batch x tgt_len x src_len): raw attention scores used for loss calculation
         """
-        '''
-        print("memory_bank:")
-        print(memory_bank.size())
-        '''
+
 
         if query.dim == 2:
             one_step = True
@@ -73,13 +78,9 @@ class GlobalAttention(nn.Module):
 
         if use_softmax:
             align_vectors = self.softmax(align.view(src_batch * query_len, src_len))
-            # align_vectors = F.softmax(align.view(src_batch * query_len, src_len), -1)
             align_vectors = align_vectors.view(src_batch, query_len, src_len)
         else:
             align_vectors = self.sigmoid(align)
-            # align_vectors = F.sigmoid(align)
-
-
 
         c = torch.bmm(align_vectors, memory_bank)
         # c is the attention weighted context representation

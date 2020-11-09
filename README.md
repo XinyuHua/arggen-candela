@@ -22,7 +22,7 @@ The dataset we used is currently held on Google drive, which can be accessed in 
 
 As described in the paper, we pre-train the encoder and realization decoder with extra data from changemyview. The pre-trained weights can be downloaded here: [encoder](https://drive.google.com/open?id=17dRozwLlWN_FgWQOyj-4fbsJC07bVZVx); [decoder](https://drive.google.com/open?id=1KO4FfxIQ1A8xKcT8QpTM6q28ZvLT_1Cd)
 
-### To run
+### To train
 
 We assume the data to be loaded under `./data/` directory, and the pre-trained [Glove embedding](https://nlp.stanford.edu/projects/glove/) at `./embeddings/glove.6B.300d.txt`. The following snippet trains the model:
 
@@ -35,6 +35,23 @@ python train.py \
 ```
 
 Model checkpoints will be saved to `./checkpoints/[exp-name]/`, and tensorboard logs will be saved to `./runs/[exp-name]/`.
+
+### To decode
+
+We implement greedy decoding for sentence planning (phrase selection and sentence type prediction), and beam search for word decoding. The following sample script run decoding based on the model checkpoint from `demo`, with `epoch_id=30`. Notice that by specifying `--use-goldstandard-plan`, the goldstandard sentence planning will be used (instead of greedy search). If option `--quiet` is not set, the intermediate logs will be printed to console.
+
+```shell script
+python generate.py \
+    --epoch-id=30 \
+    --exp-name=demo \
+    --max-token-per-sentence=30 \
+    --beam-size=5 \
+    --max-phrase-selection-time=2 \
+    --block-ngram-repeat=4 \
+    [--use-goldstandard-plan \]
+    [--quiet]
+```
+
 
 ## Contact
 

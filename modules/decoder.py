@@ -93,8 +93,8 @@ class WordDecoder(RNNDecoderBase):
             rnn_output.contiguous(),
             enc_memory_bank.contiguous(),
             memory_lengths=enc_memory_len)
-        readouts = self.readout(dec_outs)
-        return readouts, dec_outs, enc_attn
+        wd_logits = self.readout(dec_outs)
+        return wd_logits, dec_outs, enc_attn
 
     def forward(self, dec_inputs, tgt_word_len, enc_memory_bank,
                 enc_memory_len, sent_planner_output, sent_id_template,
@@ -192,7 +192,6 @@ class SentencePlanner(RNNDecoderBase):
         utils.aeq(max_sent_num, output_len)
         utils.aeq(batch_size, output_batch)
 
-
         dec_outs, ph_attn_probs, ph_attn_logits = self.ph_attn(
             rnn_output.contiguous(),
             phrase_bank.contiguous(),
@@ -200,9 +199,8 @@ class SentencePlanner(RNNDecoderBase):
             use_softmax=False
         )
 
-        readouts = self.readout(dec_outs)
-
-        return dec_state, dec_outs, ph_attn_probs, ph_attn_logits, readouts
+        stype_logits = self.readout(dec_outs)
+        return dec_state, dec_outs, ph_attn_probs, ph_attn_logits, stype_logits
 
     def init_attn(self):
         """

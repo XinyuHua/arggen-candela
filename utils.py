@@ -1,8 +1,28 @@
 import numpy as np
 import torch
+import glob
+import os
 
 DATA_DIR = "./data/"
 WEMB_DIR = "./embeddings/glove.6B.300d.txt"
+
+def find_ckpt_path(exp_name, epoch_id):
+    """Find model checkpoint path given the exp_name and epoch_id"""
+    if epoch_id == -1:
+        glob_pattern = "epoch_*_"
+    else:
+        glob_pattern = f"epoch_{epoch_id}_"
+
+    candidates = glob.glob(f"checkpoints/{exp_name}/{glob_pattern}*")
+
+    def get_epoch_id_from_path(path):
+        file_name = os.path.basename(path)
+        e_id = file_name.split("_")[1]
+        return int(e_id)
+
+    sorted_cands = sorted(candidates, key=lambda x: get_epoch_id_from_path(x),
+                          reverse=True)
+    return sorted_cands[0]
 
 def load_glove_emb(vocab):
     """

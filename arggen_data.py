@@ -40,11 +40,10 @@ class ArgumentGenerationDataset(Dataset):
 
 
     def load_data(self):
-        data_path = utils.DATA_DIR + "{}.jsonl".format(self.set_type)
+        data_path = utils.DATA_DIR + f"{self.set_type}.jsonl"
 
         tid = Counter()
-        total_lines = 217057 if self.set_type == 'train' else 33318
-        for ln in tqdm(open(data_path), total=total_lines, desc=f"Loading {self.set_type} data..."):
+        for ln in tqdm(open(data_path), desc=f"Loading {self.set_type} data..."):
             cur_obj = json.loads(ln)
 
             cur_id = cur_obj['id']
@@ -57,12 +56,18 @@ class ArgumentGenerationDataset(Dataset):
             self.src_op.append(cur_src)
 
             # load target counterarg and keyphrase
-            cur_sent_types = []
+            cur_sent_types = [0] # SOS as filler
             cur_tgt = [self.vocab.sos_idx]
             cur_tgt_sent_id = [0]
-            selected_phrase = [] # actual phrases
+            selected_phrase = [[(self.vocab.sos_idx,)]]
             phz_bank = set()
-            phz_bank.add((self.vocab.eos_idx,)) # add EOS as a special keyphrase
+
+            # add SOS and EOS as a special keyphrase, this is needed so that
+            # during inference time the model can starts from scratch, and
+            # knows when to stop.
+            phz_bank.add((self.vocab.eos_idx,))
+            phz_bank.add((self.vocab.sos_idx,))
+
             for sent_ix, sent in enumerate(cur_obj["target_counterarg"]):
                 cur_tgt.extend(self.vocab.encode(sent["tokens"]))
                 cur_tgt_sent_id.extend([sent_ix + 1 for _ in sent['tokens']])
@@ -76,6 +81,7 @@ class ArgumentGenerationDataset(Dataset):
 
                 if sent_ix == self.max_tgt_sent - 1:
                     break
+
             selected_phrase.append([(self.vocab.eos_idx,)])
             cur_tgt = cur_tgt[:self.max_tgt_token]
             cur_tgt.append(self.vocab.eos_idx)
@@ -115,7 +121,7 @@ class ArgumentGenerationDataset(Dataset):
                     tokens.extend(self.vocab.encode(sent))
                 tokens.append(self.vocab.sep_idx)
                 cur_passages.extend(tokens)
-            cur_passages = self.vocab.encode(cur_passages)[:self.max_passage_token]
+            cur_passages = cur_passages[:self.max_passage_token]
             self.passage.append(cur_passages)
 
 
